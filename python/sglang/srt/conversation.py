@@ -16,6 +16,8 @@
 # Adapted from
 # https://github.com/lm-sys/FastChat/blob/main/fastchat/conversation.py
 import dataclasses
+from enum import Enum
+
 from enum import IntEnum, auto
 from typing import Dict, List, Optional, Tuple, Union
 
@@ -546,6 +548,100 @@ def generate_chat_conv(
     return conv
 
 
+
+class LiSeparatorStyle(Enum):
+    """Different separator style."""
+    SINGLE = auto()
+    TWO = auto()
+    MPT = auto()
+    PLAIN = auto()
+    LLAMA_2 = auto()
+    PHI2 = auto()
+
+@dataclasses.dataclass
+class LiConversation:
+    """A class that keeps all conversation history."""
+    name : str
+    system: str
+    roles: List[str]
+    messages: List[List[str]]
+    offset: int
+    sep_style: LiSeparatorStyle = LiSeparatorStyle.SINGLE
+    sep: str = "###"
+    sep2: str = None
+    version: str = "Unknown"
+
+    skip_next: bool = False
+
+    image_token: str = "<image>"
+
+    def get_prompt(self):
+        messages = self.messages
+        if len(messages) > 0 and type(messages[0][1]) is tuple:
+            messages = self.messages.copy()
+            init_role, init_msg = messages[0].copy()
+            init_msg = init_msg[0].replace("<image>", "").strip()
+            if 'mmtag' in self.version:
+                messages[0] = (init_role, init_msg)
+                messages.insert(0, (self.roles[0], "<Image><image></Image>"))
+                messages.insert(1, (self.roles[1], "Received."))
+            else:
+                messages[0] = (init_role, "<image>\n" + init_msg)
+
+        if self.sep_style == LiSeparatorStyle.LLAMA_2:
+            wrap_sys = lambda msg: f"<<SYS>>\n{msg}\n<</SYS>>\n\n" if len(msg) > 0 else msg
+            wrap_inst = lambda msg: f"[INST] {msg} [/INST]"
+            ret = ""
+
+            for i, (role, message) in enumerate(messages):
+                if i == 0:
+                    assert message, "first message should not be none"
+                    assert role == self.roles[0], "first message should come from user"
+                if message:
+                    if type(message) is tuple:
+                        message, _, _ = message
+                    if i == 0: message = wrap_sys(self.system) + message
+                    if i % 2 == 0:
+                        message = wrap_inst(message)
+                        ret += self.sep + message
+                    else:
+                        ret += " " + message + " " + self.sep2
+                else:
+                    ret += ""
+            ret = ret.lstrip(self.sep)
+
+        return ret
+
+    def append_message(self, role, message):
+        self.messages.append([role, message])
+
+    def copy(self):
+        return LiConversation(
+            name=self.name,
+            system=self.system,
+            roles=self.roles,
+            messages=[[x, y] for x, y in self.messages],
+            offset=self.offset,
+            sep_style=self.sep_style,
+            sep=self.sep,
+            sep2=self.sep2,
+            version=self.version,
+            image_token=self.image_token)
+
+register_conv_template(
+    LiConversation(
+        name="li-vln",
+        system="",
+        roles=("USER", "ASSISTANT"),
+        version="llama_v2",
+        messages=(),
+        offset=0,
+        sep_style=LiSeparatorStyle.LLAMA_2,
+        sep="",
+        sep2="<|endoftext|>",
+    )
+)
+
 # llama2 template
 # reference: https://huggingface.co/blog/codellama#conversational-instructions
 # reference: https://github.com/facebookresearch/llama/blob/1a240688810f8036049e8da36b073f63d2ac552c/llama/generation.py#L212
@@ -734,3 +830,5 @@ register_conv_template(
         audio_token="(<audio>./</audio>)",
     )
 )
+
+

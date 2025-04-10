@@ -36,6 +36,7 @@ from sglang.srt.configs import (
     DeepseekVL2Config,
     ExaoneConfig,
     MultiModalityConfig,
+    VideoLlavaQwenConfig
 )
 from sglang.srt.connector import create_remote_connector
 from sglang.srt.utils import is_remote_url
@@ -46,6 +47,7 @@ _CONFIG_REGISTRY: Dict[str, Type[PretrainedConfig]] = {
     ExaoneConfig.model_type: ExaoneConfig,
     DeepseekVL2Config.model_type: DeepseekVL2Config,
     MultiModalityConfig.model_type: MultiModalityConfig,
+    VideoLlavaQwenConfig.model_type: VideoLlavaQwenConfig,
 }
 
 for name, cls in _CONFIG_REGISTRY.items():
@@ -240,6 +242,15 @@ def get_processor(
         **kwargs,
     )
 
+    if processor.tokenizer is None:
+        processor.tokenizer = AutoTokenizer.from_pretrained(
+            tokenizer_name,
+            *args,
+            trust_remote_code=trust_remote_code,
+            revision=revision,
+            clean_up_tokenization_spaces=False,
+            **kwargs,
+        )
     attach_additional_stop_token_ids(processor.tokenizer)
     return processor
 

@@ -283,6 +283,16 @@ class ModelRunner:
                 server_args.chunked_prefill_size = -1
                 server_args.disable_radix_cache = True
 
+            if self.model_config.hf_config.architectures == [
+                "VideoLlavaQwenForCausalLM"
+            ]:
+                # TODO: VideoLlavaQwenForCausalLM series does not support radix cache now, set disable_radix_cache=True automatically
+                logger.info(
+                    "Automatically turn off --chunked-prefill-size and disable radix cache forVideoLlavaQwenForCausalLM."
+                )
+                server_args.chunked_prefill_size = -1
+                server_args.disable_radix_cache = True
+
         if server_args.enable_deepep_moe:
             logger.info("DeepEP is turned on.")
 
