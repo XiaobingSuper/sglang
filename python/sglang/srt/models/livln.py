@@ -1043,19 +1043,17 @@ class VideoLlavaMetaForCausalLM(ABC):
     def prepare_inputs_labels_for_multimodal(
         self, input_ids, images, forward_batch
     ):
-        # image_idx = [idx for idx, img in enumerate(images) if img.ndim == 3]
-        # images_minibatch = torch.stack([images[idx] for idx in image_idx]) if len(image_idx) > 0 else []  # b c h w
-        batch_size = len(forward_batch.mm_inputs)
-        
+        batch_size = forward_batch.batch_size
         images_minibatch = images.reshape(batch_size, -1, *images.shape[1:])
-        input_ids = input_ids.reshape(batch_size, -1)
-        
+        # split input_ids into minibatch give by seq_lens
+        cum_seq_lens = forward_batch.seq_lens.cumsum(dim=0).cpu()
+        split_input_ids = torch.tensor_split(input_ids, cum_seq_lens, dim=0)
         if getattr(images_minibatch, 'ndim', 0) == 4:  # batch consists of images, [b, c, h, w]
             image_features_minibatch = self.encode_images(images_minibatch)  # [b, l, c]
-        
-        
+
         input_embeds = []
-        for batch_idx, cur_input_ids in enumerate(input_ids):
+        for batch_idx in range(batch_size):
+            cur_input_ids = split_input_ids[batch_idx]
             new_input_embeds = []
             pad_values = forward_batch.mm_inputs[batch_idx].pad_values
             image_token_idx = torch.where(cur_input_ids == pad_values[0])[0].tolist()
@@ -1132,7 +1130,6 @@ class VideoLlavaQwenForCausalLM(Qwen2ForCausalLM, VideoLlavaMetaForCausalLM):
 
     def pad_input_ids(self, input_ids: List[int], image_inputs: MultimodalInputs):
         pad_values = image_inputs.pad_values
-        
         # token_id for image token in input_ids is IMAGE_TOKEN_INDEX, replace it with pad_values
         # input_ids is a list of int
         for i in range(len(input_ids)):
